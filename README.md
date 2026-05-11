@@ -1,4 +1,3 @@
-
 # Usage
 
 1. Run "./clone-repos"
@@ -29,8 +28,13 @@ The CLI is under compiler/src/Terminal
 
 The actual formatting code is under compiler-node/src/Formatter
 
+The compiler-node/src/Formatter/README.md file explains some of the
+rules that I have implemented. This documentation will grow, and
+eventually will be moved into a doc comment in the code.
+
 The compiler-common code was updated to serialize the AST into JSON,
-which useful for debugging.
+which useful for debugging. It also has an unofficial fix for this
+issue: https://github.com/gren-lang/compiler-common/issues/14
 
 # Tests
 The pretty printer tests are in a new directory in
