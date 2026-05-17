@@ -49,6 +49,26 @@ def clone_package(author: str, repo: str, version: str, cwd: str) -> None:
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+CATEGORY_RE = re.compile(r'^-- ([A-Z][A-Z ]+?) -{2,}', re.MULTILINE)
+
+
+def _parse_category(output: str) -> str:
+    m = CATEGORY_RE.search(output)
+    return m.group(1).strip() if m else "UNKNOWN"
+
+
+def _print_by_category(items: list[tuple[str, str]], label: str) -> None:
+    """Print items grouped by category. items is a list of (name, category)."""
+    by_category: dict[str, list[str]] = {}
+    for name, category in items:
+        by_category.setdefault(category, []).append(name)
+    print(f"\n{label} by category:")
+    for category in sorted(by_category):
+        paths = sorted(by_category[category])
+        n = len(paths)
+        print(f"\n  {category} ({n} {'file' if n == 1 else 'files'}):")
+        for path in paths:
+            print(f"    {path}")
 
 
 def _do_fetch(author: str, repo: str, version: str, cwd: str) -> str | None:
@@ -62,19 +82,24 @@ def _do_fetch(author: str, repo: str, version: str, cwd: str) -> str | None:
         return f"{author}/{repo}"
 
 
-def _do_format(pkg: str, dest: str, gren_sh: str) -> tuple[str, bool] | None:
-    """Format one package; return (pkg, timed_out) on failure/timeout, None on success."""
+def _do_format(pkg: str, dest: str, gren_sh: str) -> tuple[str, str, bool] | None:
+    """Format one package; return (pkg, category, timed_out) on failure/timeout, None on success."""
     print(f"Formatting {pkg} ...")
     try:
         result = subprocess.run(
-            [gren_sh, "format", "--dangerous"], cwd=dest, timeout=5
+            [gren_sh, "format", "--dangerous"],
+            cwd=dest,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode != 0:
-            return (pkg, False)
+            category = _parse_category(result.stdout + result.stderr)
+            return (pkg, category, False)
         return None
     except subprocess.TimeoutExpired:
         print(f"  TIMEOUT: {pkg}", file=sys.stderr)
-        return (pkg, True)
+        return (pkg, "TIMEOUT", True)
 
 
 def _find_gren_files(package_dir: str) -> list[str]:
@@ -87,8 +112,8 @@ def _find_gren_files(package_dir: str) -> list[str]:
     return found
 
 
-def _do_check(rel_path: str, abs_path: str, gren_sh: str) -> tuple[str, bool] | None:
-    """Check one file; return (rel_path, timed_out) on failure/timeout, None on success."""
+def _do_check(rel_path: str, abs_path: str, gren_sh: str) -> tuple[str, str, bool] | None:
+    """Check one file; return (rel_path, category, timed_out) on failure/timeout, None on success."""
     try:
         result = subprocess.run(
             [gren_sh, "format", f"--check={abs_path}"],
@@ -99,10 +124,11 @@ def _do_check(rel_path: str, abs_path: str, gren_sh: str) -> tuple[str, bool] | 
         output = (result.stdout + result.stderr).strip()
         if "Success" in output:
             return None
-        return (rel_path, False)
+        category = _parse_category(output)
+        return (rel_path, category, False)
     except subprocess.TimeoutExpired:
         print(f"  TIMEOUT: {rel_path}", file=sys.stderr)
-        return (rel_path, True)
+        return (rel_path, "TIMEOUT", True)
 
 
 def cmd_check(args) -> None:
@@ -131,8 +157,8 @@ def cmd_check(args) -> None:
             files_to_check.append((rel_path, abs_path))
 
     n_ok = 0
-    failed = []
-    timed_out = []
+    failed = []       # list of (path, category)
+    timed_out = []    # list of (path, category)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
         futures = {
             pool.submit(_do_check, rel, abs_path, gren_sh): rel
@@ -143,29 +169,28 @@ def cmd_check(args) -> None:
             if result is None:
                 n_ok += 1
             else:
-                path, is_timeout = result
-                (timed_out if is_timeout else failed).append(path)
+                path, category, is_timeout = result
+                (timed_out if is_timeout else failed).append((path, category))
+
+    failed_paths = [p for p, _ in failed]
+    timed_out_paths = [p for p, _ in timed_out]
 
     with open("failed.txt", "w") as f:
-        f.write("\n".join(sorted(failed)))
-        if failed:
+        f.write("\n".join(sorted(failed_paths)))
+        if failed_paths:
             f.write("\n")
     with open("timedout.txt", "w") as f:
-        f.write("\n".join(sorted(timed_out)))
-        if timed_out:
+        f.write("\n".join(sorted(timed_out_paths)))
+        if timed_out_paths:
             f.write("\n")
 
     print(f"\nSuccessful: {n_ok}")
     print(f"Failed:     {len(failed)}")
     print(f"Timed out:  {len(timed_out)}")
     if failed:
-        print("\nFailed files:")
-        for path in sorted(failed):
-            print(f"  {path}")
+        _print_by_category(failed, "Failed files")
     if timed_out:
-        print("\nTimed out files:")
-        for path in sorted(timed_out):
-            print(f"  {path}")
+        _print_by_category(timed_out, "Timed out files")
 
 
 def _print_failures(failed: list[str]) -> None:
@@ -227,8 +252,8 @@ def cmd_format(args) -> None:
         else:
             targets.append((pkg, dest))
 
-    failed = []
-    timed_out = []
+    failed = []       # list of (pkg, category)
+    timed_out = []    # list of (pkg, category)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
         futures = {
             pool.submit(_do_format, pkg, dest, gren_sh): pkg
@@ -237,14 +262,17 @@ def cmd_format(args) -> None:
         for fut in concurrent.futures.as_completed(futures):
             result = fut.result()
             if result is not None:
-                pkg, is_timeout = result
-                (timed_out if is_timeout else failed).append(pkg)
+                pkg, category, is_timeout = result
+                (timed_out if is_timeout else failed).append((pkg, category))
 
-    _print_failures(failed)
+    _print_failures([p for p, _ in failed])
+    if failed:
+        _print_by_category(failed, "Failed packages")
     if timed_out:
         print(f"\nTimed out ({len(timed_out)}):", file=sys.stderr)
-        for pkg in timed_out:
+        for pkg, _ in timed_out:
             print(f"  {pkg}", file=sys.stderr)
+        _print_by_category(timed_out, "Timed out packages")
 
 
 def main() -> None:
