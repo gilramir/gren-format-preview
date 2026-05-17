@@ -55,11 +55,17 @@ Key formatter modules in `compiler-node/src/Formatter/`:
 # Format all files in a project in place
 ./gren.sh format --dangerous
 
-# Print AST as JSON (for debugging)
-./gren.sh format --json=<path>
+# Print the pre-format AST as JSON (for debugging)
+./gren.sh format --pre-ast=<path>
+
+# Print the post-format AST as JSON (verifies ASTs match)
+./gren.sh format --post-ast=<path>
 
 # Print the Logical Printing Tree as JSON
 ./gren.sh format --lpt=<path>
+
+# Print the PrettyExpressive Doc as JSON
+./gren.sh format --pex=<path>
 
 # Write formatted output to <file>.gren.fmt (originals untouched)
 ./gren.sh format --rename

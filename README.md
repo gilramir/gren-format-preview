@@ -50,11 +50,19 @@ You can customize this command with the following flags:
     --dangerous
         Format all source files in the project, overwriting them in place
 
-    --json=<path>
-        Parse a single file and print its AST as JSON to stdout
-
     --lpt=<path>
         Parse a single file and print its Logical Printing Tree as JSON to stdout
+
+    --pex=<path>
+        Parse and format a single file, then print the PrettyExpressive Doc as
+        JSON to stdout
+
+    --post-ast=<path>
+        Parse and format a file, verify the ASTs match, then print the formatted
+        file's AST as JSON to stdout
+
+    --pre-ast=<path>
+        Parse a single file and print its AST as JSON to stdout
 
     --rename
         Write the formatted output to <filename>.gren.fmt next to each source
