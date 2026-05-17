@@ -165,8 +165,13 @@ issue: https://github.com/gren-lang/compiler-common/issues/14
 
 ## gren-format-preview-02
 
-The compiler-common code was updated to avoid a bug in doc comments
-and String.dropLast. This is an unofficial fix for this issue:
+Lots of Gren code was tested, and many formatting bugs were fixed.
+
+Many bugs were filed in the compiler-common and core packages, too.
+
+The local copy of the compiler-common code was updated to avoid a bug
+in doc comments and String.dropLast. This is an unofficial fix for
+this issue:
 https://github.com/gren-lang/compiler-common/issues/19
 
 
