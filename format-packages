@@ -3,6 +3,7 @@
 
 import argparse
 import concurrent.futures
+import json
 import os
 import re
 import subprocess
@@ -50,6 +51,23 @@ def clone_package(author: str, repo: str, version: str, cwd: str) -> None:
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CATEGORY_RE = re.compile(r'^-- ([A-Z][A-Z ]+?) -{2,}', re.MULTILINE)
+MIN_GREN_VERSION = (0, 6, 0)
+
+
+def _gren_version_ok(package_dir: str) -> bool:
+    """Return False if gren.json's upper bound gren-version is below 0.6.0."""
+    gren_json = os.path.join(package_dir, "gren.json")
+    try:
+        with open(gren_json) as f:
+            data = json.load(f)
+        field = data.get("gren-version", "")
+        versions = re.findall(r'(\d+)\.(\d+)\.(\d+)', field)
+        if not versions:
+            return True
+        upper = tuple(int(x) for x in versions[-1])
+        return upper >= MIN_GREN_VERSION
+    except Exception:
+        return True
 
 
 def _parse_category(output: str) -> str:
@@ -151,6 +169,9 @@ def cmd_check(args) -> None:
         if not os.path.isdir(dest):
             print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
             continue
+        if not _gren_version_ok(dest):
+            print(f"Skipping due to gren version: {pkg}")
+            continue
         print(f"Checking {pkg} ...")
         for abs_path in _find_gren_files(dest):
             rel_path = os.path.relpath(abs_path, cwd)
@@ -249,6 +270,8 @@ def cmd_format(args) -> None:
         dest = os.path.join(cwd, pkg)
         if not os.path.isdir(dest):
             print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
+        elif not _gren_version_ok(dest):
+            print(f"Skipping due to gren version: {pkg}")
         else:
             targets.append((pkg, dest))
 
