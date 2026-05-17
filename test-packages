@@ -2,6 +2,7 @@
 """test-packages - Fetch and test gren formatter against published packages."""
 
 import argparse
+import concurrent.futures
 import os
 import re
 import subprocess
@@ -46,22 +47,59 @@ def clone_package(author: str, repo: str, version: str, cwd: str) -> None:
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
+def _do_fetch(author: str, repo: str, version: str, cwd: str) -> str | None:
+    """Clone one package; return the package name on failure, None on success."""
+    try:
+        clone_package(author, repo, version, cwd)
+        return None
+    except Exception as exc:
+        print(f"  ERROR {author}/{repo}: {exc}", file=sys.stderr)
+        return f"{author}/{repo}"
+
+
+def _do_format(pkg: str, dest: str, gren_sh: str) -> str | None:
+    """Format one package; return the package name on failure, None on success."""
+    print(f"Formatting {pkg} ...")
+    result = subprocess.run([gren_sh, "format", "--dangerous"], cwd=dest)
+    if result.returncode != 0:
+        return pkg
+    return None
+
+
+def _print_failures(failed: list[str]) -> None:
+    if failed:
+        print(f"\nFailed ({len(failed)}):", file=sys.stderr)
+        for pkg in failed:
+            print(f"  {pkg}", file=sys.stderr)
+
+
 def cmd_fetch(args) -> None:
     cwd = os.getcwd()
 
     if args.packages:
         all_packages = fetch_package_list()
         pkg_map = {f"{a}/{r}": (a, r, v) for a, r, v in all_packages}
+        targets = []
         for pkg_name in args.packages:
             if pkg_name not in pkg_map:
                 print(f"Unknown package: {pkg_name}", file=sys.stderr)
                 sys.exit(1)
-            author, repo, version = pkg_map[pkg_name]
-            clone_package(author, repo, version, cwd)
+            targets.append(pkg_map[pkg_name])
     else:
-        packages = fetch_package_list()
-        for author, repo, version in packages:
-            clone_package(author, repo, version, cwd)
+        targets = fetch_package_list()
+
+    failed = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
+        futures = {
+            pool.submit(_do_fetch, a, r, v, cwd): f"{a}/{r}"
+            for a, r, v in targets
+        }
+        for fut in concurrent.futures.as_completed(futures):
+            result = fut.result()
+            if result is not None:
+                failed.append(result)
+
+    _print_failures(failed)
 
 
 def cmd_format(args) -> None:
@@ -69,24 +107,35 @@ def cmd_format(args) -> None:
     gren_sh = os.path.join(SCRIPT_DIR, "gren.sh")
 
     if args.packages:
-        targets = args.packages
+        pkg_names = args.packages
     else:
         all_packages = fetch_package_list()
-        targets = [
+        pkg_names = [
             f"{author}/{repo}"
             for author, repo, _ in all_packages
             if os.path.isdir(os.path.join(cwd, author, repo))
         ]
 
-    for pkg in targets:
+    targets = []
+    for pkg in pkg_names:
         dest = os.path.join(cwd, pkg)
         if not os.path.isdir(dest):
             print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
-            continue
-        print(f"Formatting {pkg} ...")
-        result = subprocess.run([gren_sh, "format", "--dangerous"], cwd=dest)
-        if result.returncode != 0:
-            print(f"  FAILED (exit {result.returncode}): {pkg}", file=sys.stderr)
+        else:
+            targets.append((pkg, dest))
+
+    failed = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
+        futures = {
+            pool.submit(_do_format, pkg, dest, gren_sh): pkg
+            for pkg, dest in targets
+        }
+        for fut in concurrent.futures.as_completed(futures):
+            result = fut.result()
+            if result is not None:
+                failed.append(result)
+
+    _print_failures(failed)
 
 
 def main() -> None:
@@ -105,6 +154,9 @@ def main() -> None:
         metavar="AUTHOR/REPO",
         help="Packages to fetch (e.g. aramiscd/gren-color). Fetches all if omitted.",
     )
+    fetch_parser.add_argument(
+        "-j", type=int, default=1, metavar="N", help="Parallel workers (default 1)."
+    )
     fetch_parser.set_defaults(func=cmd_fetch)
 
     format_parser = subparsers.add_parser(
@@ -116,6 +168,9 @@ def main() -> None:
         nargs="*",
         metavar="AUTHOR/REPO",
         help="Packages to format. Formats all locally cloned packages if omitted.",
+    )
+    format_parser.add_argument(
+        "-j", type=int, default=1, metavar="N", help="Parallel workers (default 1)."
     )
     format_parser.set_defaults(func=cmd_format)
 
