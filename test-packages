@@ -114,6 +114,7 @@ def cmd_check(args) -> None:
         if not os.path.isdir(dest):
             print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
             continue
+        print(f"Checking {pkg} ...")
         for abs_path in _find_gren_files(dest):
             rel_path = os.path.relpath(abs_path, cwd)
             files_to_check.append((rel_path, abs_path))
