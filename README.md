@@ -75,18 +75,24 @@ You can customize this command with the following flags:
 
 # The Approach
 
-The AST and Comments are converted into a "Logical Printing Tree" (LPT).
-First the AST is used to fill in the LPT; these nodes retain their
-original row and column numbers. Then the comments are put into the
-LPT based on row and column number.
+The formatter pipeline has four stages:
 
-The LPT is then converted into a PrettyExpressive "Doc", which are
-instructions for how to print, but also make choices as the page width
-boundary is approached; this is currently set to 100 columns.
-It's possible we don't keep the PrettyExpressive printer and allow
-the text to be as wide as possible.
+1. **Parse** — The Haskell compiler parses the `.gren` source into an AST.
+   Use `--pre-ast` to dump this AST as JSON.
 
-Then the PrettyExpressive module renders the text.
+2. **LPT** — The AST and comments are converted into a "Logical Printing Tree".
+   The AST nodes retain their original row and column numbers; comments are
+   inserted by position. Use `--lpt` to dump the LPT as JSON.
+
+3. **Doc** — The LPT is converted into a PrettyExpressive `Doc`, which encodes
+   layout choices that are resolved as the page width (100 columns) is
+   approached. Use `--pex` to dump the Doc as JSON.
+
+4. **Render** — PrettyExpressive renders the final text.
+
+After formatting, the formatted file is re-parsed and its AST is compared to
+the original to verify correctness. Use `--post-ast` to dump the formatted
+file's AST as JSON (this also runs the verification).
 
 # Dev Info
 
