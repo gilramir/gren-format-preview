@@ -9,9 +9,16 @@ the gren-lang repos.
     https://github.com/gren-lang/compiler
 
 That is:
+
 ```
 devbox run prepare-deps
 devbox run build
+```
+
+Or just use the helper script:
+
+```
+./build.sh
 ```
 
 Use the "gren.sh" script in this directory as your "gren" exectuable.
@@ -93,6 +100,34 @@ To run them, in that directory:
 ```
 
 The normal tests in compiler-node/tests are broken for the moment.
+
+# test-packages
+
+The `test-packages` script runs the formatter against published Gren packages.
+
+Fetch all packages into a directory:
+```
+mkdir /tmp/pkgs && cd /tmp/pkgs
+/path/to/test-packages fetch
+```
+
+Fetch specific packages:
+```
+./test-packages fetch aramiscd/gren-color blaix/gren-ansi
+```
+
+Run the formatter on all fetched packages:
+```
+./test-packages format
+```
+
+Run the formatter on specific packages:
+```
+./test-packages format aramiscd/gren-color
+```
+
+Both subcommands accept `-j N` to run N operations in parallel. Failed
+package names are summarized at the end of the run.
 
 # Status
 
