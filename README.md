@@ -149,3 +149,10 @@ The compiler-common code was updated to serialize the AST into JSON,
 which useful for debugging. It also has an unofficial fix for this
 issue: https://github.com/gren-lang/compiler-common/issues/14
 
+## gren-format-preview-02
+
+The compiler-common code was updated to avoid a bug in doc comments
+and String.dropLast. This is an unofficial fix for this issue:
+https://github.com/gren-lang/compiler-common/issues/19
+
+
