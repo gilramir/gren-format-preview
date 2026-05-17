@@ -54,11 +54,25 @@ CATEGORY_RE = re.compile(r'^-- ([A-Z][A-Z ]+?) -{2,}', re.MULTILINE)
 MIN_GREN_VERSION = (0, 6, 0)
 
 
-def _gren_version_ok(package_dir: str) -> bool:
+def _find_nearest_gren_json(start_dir: str, stop_dir: str) -> str | None:
+    """Walk up from start_dir to stop_dir returning the first gren.json found."""
+    d = start_dir
+    while True:
+        candidate = os.path.join(d, "gren.json")
+        if os.path.isfile(candidate):
+            return candidate
+        if os.path.abspath(d) == os.path.abspath(stop_dir):
+            return None
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def _gren_version_ok(gren_json_path: str) -> bool:
     """Return False if gren.json's upper bound gren-version is below 0.6.0."""
-    gren_json = os.path.join(package_dir, "gren.json")
     try:
-        with open(gren_json) as f:
+        with open(gren_json_path) as f:
             data = json.load(f)
         field = data.get("gren-version", "")
         versions = re.findall(r'(\d+)\.(\d+)\.(\d+)', field)
@@ -164,18 +178,21 @@ def cmd_check(args) -> None:
         ]
 
     files_to_check = []
+    skipped = []      # list of rel_path
     for pkg in pkg_names:
         dest = os.path.join(cwd, pkg)
         if not os.path.isdir(dest):
             print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
             continue
-        if not _gren_version_ok(dest):
-            print(f"Skipping due to gren version: {pkg}")
-            continue
         print(f"Checking {pkg} ...")
         for abs_path in _find_gren_files(dest):
             rel_path = os.path.relpath(abs_path, cwd)
-            files_to_check.append((rel_path, abs_path))
+            gren_json = _find_nearest_gren_json(os.path.dirname(abs_path), dest)
+            if gren_json is not None and not _gren_version_ok(gren_json):
+                print(f"Skipping due to gren version: {rel_path}")
+                skipped.append(rel_path)
+            else:
+                files_to_check.append((rel_path, abs_path))
 
     n_ok = 0
     failed = []       # list of (path, category)
@@ -204,10 +221,19 @@ def cmd_check(args) -> None:
         f.write("\n".join(sorted(timed_out_paths)))
         if timed_out_paths:
             f.write("\n")
+    with open("skipped.txt", "w") as f:
+        f.write("\n".join(sorted(skipped)))
+        if skipped:
+            f.write("\n")
 
     print(f"\nSuccessful: {n_ok}")
+    print(f"Skipped:    {len(skipped)}")
     print(f"Failed:     {len(failed)}")
     print(f"Timed out:  {len(timed_out)}")
+    if skipped:
+        print("\nSkipped files:")
+        for path in sorted(skipped):
+            print(f"  {path}")
     if failed:
         _print_by_category(failed, "Failed files")
     if timed_out:
@@ -270,7 +296,7 @@ def cmd_format(args) -> None:
         dest = os.path.join(cwd, pkg)
         if not os.path.isdir(dest):
             print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
-        elif not _gren_version_ok(dest):
+        elif not _gren_version_ok(os.path.join(dest, "gren.json")):
             print(f"Skipping due to gren version: {pkg}")
         else:
             targets.append((pkg, dest))
