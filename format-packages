@@ -87,6 +87,8 @@ def _gren_version_ok(gren_json_path: str) -> bool:
 def _parse_category(output: str) -> str:
     if "RangeError: Maximum call stack size exceeded" in output:
         return "STACK OVERFLOW"
+    if "FAILED TO PARSE" in output:
+        return "FAILED TO PARSE"
     m = CATEGORY_RE.search(output)
     return m.group(1).strip() if m else "UNKNOWN"
 
