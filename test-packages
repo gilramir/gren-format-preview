@@ -7,15 +7,19 @@ import os
 import re
 import subprocess
 import sys
-import urllib.request
 
 PACKAGES_URL = "https://packages.gren-lang.org/package"
 
 
 def fetch_package_list() -> list[tuple[str, str, str]]:
     """Return list of (author, repo, version) from the Gren package registry."""
-    with urllib.request.urlopen(PACKAGES_URL) as resp:
-        html_content = resp.read().decode("utf-8")
+    result = subprocess.run(
+        ["curl", "-sf", PACKAGES_URL],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    html_content = result.stdout
 
     pattern = r'/package/([^/]+)/([^/]+)/version/([^/]+)/overview'
     seen = set()
