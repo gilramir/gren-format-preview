@@ -49,6 +49,7 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 def _do_fetch(author: str, repo: str, version: str, cwd: str) -> str | None:
     """Clone one package; return the package name on failure, None on success."""
+    print(f"Fetching {author}/{repo} ...")
     try:
         clone_package(author, repo, version, cwd)
         return None
@@ -76,6 +77,7 @@ def _print_failures(failed: list[str]) -> None:
 def cmd_fetch(args) -> None:
     cwd = os.getcwd()
 
+    print("Fetching package list ...")
     if args.packages:
         all_packages = fetch_package_list()
         pkg_map = {f"{a}/{r}": (a, r, v) for a, r, v in all_packages}
