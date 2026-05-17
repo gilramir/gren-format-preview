@@ -126,7 +126,17 @@ Run the formatter on specific packages:
 ./test-packages format aramiscd/gren-color
 ```
 
-Both subcommands accept `-j N` to run N operations in parallel. Failed
+Check formatting of all fetched packages (per-file, does not modify files):
+```
+./test-packages check
+./test-packages check aramiscd/gren-color
+```
+
+After a `check` run, results are written to:
+- `failed.txt` — files that did not format correctly
+- `timedout.txt` — files that exceeded the 5-second timeout
+
+All subcommands accept `-j N` to run N operations in parallel. Failed
 package names are summarized at the end of the run.
 
 # Status

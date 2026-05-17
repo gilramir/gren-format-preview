@@ -97,7 +97,7 @@ def _do_check(rel_path: str, abs_path: str, gren_sh: str) -> tuple[str, bool] | 
             timeout=5,
         )
         output = (result.stdout + result.stderr).strip()
-        if "Successful" in output:
+        if "Success" in output:
             return None
         return (rel_path, False)
     except subprocess.TimeoutExpired:
@@ -145,6 +145,15 @@ def cmd_check(args) -> None:
             else:
                 path, is_timeout = result
                 (timed_out if is_timeout else failed).append(path)
+
+    with open("failed.txt", "w") as f:
+        f.write("\n".join(sorted(failed)))
+        if failed:
+            f.write("\n")
+    with open("timedout.txt", "w") as f:
+        f.write("\n".join(sorted(timed_out)))
+        if timed_out:
+            f.write("\n")
 
     print(f"\nSuccessful: {n_ok}")
     print(f"Failed:     {len(failed)}")
