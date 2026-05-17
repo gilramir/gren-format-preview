@@ -101,35 +101,35 @@ To run them, in that directory:
 
 The normal tests in compiler-node/tests are broken for the moment.
 
-# test-packages
+# format-packages
 
-The `test-packages` script runs the formatter against published Gren packages.
+The `format-packages` script runs the formatter against published Gren packages.
 
 Fetch all packages into a directory:
 ```
 mkdir /tmp/pkgs && cd /tmp/pkgs
-/path/to/test-packages fetch
+/path/to/format-packages fetch
 ```
 
 Fetch specific packages:
 ```
-./test-packages fetch aramiscd/gren-color blaix/gren-ansi
+./format-packages fetch aramiscd/gren-color blaix/gren-ansi
 ```
 
 Run the formatter on all fetched packages:
 ```
-./test-packages format
+./format-packages format
 ```
 
 Run the formatter on specific packages:
 ```
-./test-packages format aramiscd/gren-color
+./format-packages format aramiscd/gren-color
 ```
 
 Check formatting of all fetched packages (per-file, does not modify files):
 ```
-./test-packages check
-./test-packages check aramiscd/gren-color
+./format-packages check
+./format-packages check aramiscd/gren-color
 ```
 
 After a `check` run, results are written to:
