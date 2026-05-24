@@ -88,6 +88,13 @@ def _parse_category(output: str) -> str:
     if "RangeError: Maximum call stack size exceeded" in output:
         return "STACK OVERFLOW"
     if "FAILED TO PARSE" in output:
+        for line in reversed(output.splitlines()):
+            line = line.strip()
+            if not line or line.startswith(("|", "^", "-")):
+                continue
+            if re.match(r'^\d+\s*\|', line):
+                continue
+            return line
         return "FAILED TO PARSE"
     m = CATEGORY_RE.search(output)
     return m.group(1).strip() if m else "UNKNOWN"
