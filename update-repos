@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Run 'git pull' in any of the gren-format compiler repos that exist on disk."""
+"""Update the gren-format compiler repos that exist on disk.
 
+By default runs 'git pull' in each repo. If a git tag is given as an
+argument, runs 'git checkout TAG' in each repo instead.
+"""
+
+import argparse
 import os
 import subprocess
 
@@ -15,18 +20,30 @@ def repo_name(url: str) -> str:
     return url.removesuffix(".git").rsplit("/", 1)[-1].lstrip("gren-")
 
 
-def pull_if_exists(url: str) -> None:
+def update_if_exists(url: str, tag: str | None) -> None:
     name = repo_name(url)
     if not os.path.isdir(name):
         print(f"Skipping {name} (not found on disk)")
         return
-    print(f"Pulling {name} ...")
-    subprocess.run(["git", "-C", name, "pull"], check=True)
+    if tag:
+        print(f"Checking out {tag} in {name} ...")
+        subprocess.run(["git", "-C", name, "checkout", tag], check=True)
+    else:
+        print(f"Pulling {name} ...")
+        subprocess.run(["git", "-C", name, "pull"], check=True)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "tag",
+        nargs="?",
+        help="git tag to check out in each repo instead of pulling",
+    )
+    args = parser.parse_args()
+
     for url in REPOS:
-        pull_if_exists(url)
+        update_if_exists(url, args.tag)
 
     print("\nDone.")
 

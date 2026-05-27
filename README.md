@@ -29,6 +29,21 @@ that was just built.
 Make sure "node" is in your $PATH. If not, adjust gren.sh so it
 adds it to the $PATH.
 
+# Updating the repos
+
+Once the repos are cloned, use "./update-repos" to update them.
+By default it runs "git pull" in each repo that exists on disk:
+
+```
+./update-repos
+```
+
+Pass a git tag to check out that tag in each repo instead of pulling:
+
+```
+./update-repos gren-format-preview-04
+```
+
 # CLI
 
 The CLI has switches which are in place for development, and won't survive
@@ -174,4 +189,11 @@ in doc comments and String.dropLast. This is an unofficial fix for
 this issue:
 https://github.com/gren-lang/compiler-common/issues/19
 
+## git tag gren-format-preview-03
+
+Pull in performance fixes from PrettyExpressive
+
+## git tag gren-format-preview-04
+
+Large amount of fixes for idempotency and canonical output.
 
