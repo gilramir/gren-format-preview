@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Update the gren-format compiler repos that exist on disk.
 
-By default runs 'git pull' in each repo. If a git tag is given as an
-argument, runs 'git checkout TAG' in each repo instead.
+By default checks out the 'formatter' branch and then runs 'git pull' in
+each repo. If a git tag is given as an argument, runs 'git fetch' and then
+'git checkout TAG' in each repo instead.
 """
 
 import argparse
@@ -26,9 +27,13 @@ def update_if_exists(url: str, tag: str | None) -> None:
         print(f"Skipping {name} (not found on disk)")
         return
     if tag:
+        print(f"Fetching {name} ...")
+        subprocess.run(["git", "-C", name, "fetch"], check=True)
         print(f"Checking out {tag} in {name} ...")
         subprocess.run(["git", "-C", name, "checkout", tag], check=True)
     else:
+        print(f"Checking out formatter branch in {name} ...")
+        subprocess.run(["git", "-C", name, "checkout", "formatter"], check=True)
         print(f"Pulling {name} ...")
         subprocess.run(["git", "-C", name, "pull"], check=True)
 
