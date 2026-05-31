@@ -189,11 +189,17 @@ in doc comments and String.dropLast. This is an unofficial fix for
 this issue:
 https://github.com/gren-lang/compiler-common/issues/19
 
-## git tag gren-format-preview-03
+## gren-format-preview-03
 
 Pull in performance fixes from PrettyExpressive
 
-## git tag gren-format-preview-04
+## gren-format-preview-04
 
 Large amount of fixes for idempotency and canonical output.
 
+## gren-format-preview-05
+
+Removed my misunderstanding of wanting to produce truly canonical formatted
+output from any input. Now an author's newline breaks are honored, or, at least
+distinguish between "keep this expression on one line if possible" and
+"break this expression across multiple lines even if it could fit on one line"
