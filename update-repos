@@ -17,11 +17,11 @@ REPOS = [
 ]
 
 
-def repo_name(url: str) -> str:
+def repo_name(url):
     return url.removesuffix(".git").rsplit("/", 1)[-1].lstrip("gren-")
 
 
-def update_if_exists(url: str, tag: str | None) -> None:
+def update_if_exists(url, tag):
     name = repo_name(url)
     if not os.path.isdir(name):
         print(f"Skipping {name} (not found on disk)")

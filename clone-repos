@@ -10,11 +10,11 @@ REPOS = [
 ]
 
 
-def repo_name(url: str) -> str:
+def repo_name(url):
     return url.removesuffix(".git").rsplit("/", 1)[-1].lstrip("gren-")
 
 
-def clone_and_configure(url: str) -> None:
+def clone_and_configure(url):
     name = repo_name(url)
     print(f"Cloning {url} ...")
     subprocess.run(["git", "clone", url, name], check=True)
