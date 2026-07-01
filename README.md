@@ -5,13 +5,12 @@
 This clones my repos, but naming their directories as if they were cloned from
 the gren-lang repos.
 
-2. Build the compiler as per the regular instructions at
-    https://github.com/gren-lang/compiler
+2. Build gren-format
 
 That is:
 
 ```
-devbox run prepare-deps
+cd gren-format
 devbox run build
 ```
 
@@ -21,10 +20,8 @@ Or just use the helper script:
 ./build.sh
 ```
 
-Use the "gren.sh" script in this directory as your "gren" exectuable.
-Your CWD can be any directory when you use it. It will invoke the
-Haskell-based compiler you just built, using the compiler backend
-that was just built.
+Use the "gren-format.sh" script in this directory as your "gren-format"
+exectuable.
 
 Make sure "node" is in your $PATH. If not, adjust gren.sh so it
 adds it to the $PATH.
@@ -46,91 +43,50 @@ Pass a git tag to check out that tag in each repo instead of pulling:
 
 # CLI
 
-The CLI has switches which are in place for development, and won't survive
-when this gets officially used.
 
 ```
 Format Gren source code.
 
-    gren format
+    gren-format [<path>...]
 
 
+
+Arguments:
+
+    <path>
+        Gren source file or directory to pretty-print in place
 
 You can customize this command with the following flags:
-
-    --check=<path>
-        Parse and format a file, then compare original and formatted ASTs; prints
-        Success or Failure
-
-    --dangerous
-        Format all source files in the project, overwriting them in place
 
     --lpt=<path>
         Parse a single file and print its Logical Printing Tree as JSON to stdout
 
-    --pex=<path>
-        Parse and format a single file, then print the PrettyExpressive Doc as
-        JSON to stdout
-
     --post-ast=<path>
-        Parse and format a file, verify the ASTs match, then print the formatted
-        file's AST as JSON to stdout
+        Parse and format a file, verify the ASTs match, then print the formatted file's AST as JSON to stdout
 
     --pre-ast=<path>
         Parse a single file and print its AST as JSON to stdout
 
-    --rename
-        Write the formatted output to <filename>.gren.fmt next to each source
-        file, leaving originals untouched
+    --remove-unused-imports
+        Remove unused imports while formatting
+
+    --render-doc=<path>
+        Parse a single file and print its Render.Doc tree as JSON to stdout
 
     --show=<path>
         Parse and pretty-print a single file to stdout without modifying it
+
 ```
 
 
 # The Approach
 
-The formatter pipeline has four stages:
+see gren-format-lib/README.md
 
-1. **Parse** — The Haskell compiler parses the `.gren` source into an AST.
-   Use `--pre-ast` to dump this AST as JSON.
-
-2. **LPT** — The AST and comments are converted into a "Logical Printing Tree".
-   The AST nodes retain their original row and column numbers; comments are
-   inserted by position. Use `--lpt` to dump the LPT as JSON.
-
-3. **Doc** — The LPT is converted into a PrettyExpressive `Doc`, which encodes
-   layout choices that are resolved as the page width (100 columns) is
-   approached. Use `--pex` to dump the Doc as JSON.
-
-4. **Render** — PrettyExpressive renders the final text.
-
-After formatting, the formatted file is re-parsed and its AST is compared to
-the original to verify correctness. Use `--post-ast` to dump the formatted
-file's AST as JSON (this also runs the verification).
-
-# Dev Info
-
-The CLI is under compiler/src/Terminal
-
-The actual formatting code is under compiler-node/src/Formatter
-
-The compiler-node/src/Formatter/README.md file explains some of the
-rules that I have implemented. This documentation will grow, and
-eventually will be moved into a doc comment in the code.
-
-# Tests
-The pretty printer tests are in a new directory in
-compiler-node/effectful-tests
-
-To run them, in that directory:
-```
-./run-tests.sh
-```
-
-The normal tests in compiler-node/tests are broken for the moment.
 
 # format-packages
+
+**THIS IS CURRENTLY BROKEN**
 
 The `format-packages` script runs the formatter against published Gren packages.
 
@@ -203,3 +159,13 @@ Removed my misunderstanding of wanting to produce truly canonical formatted
 output from any input. Now an author's newline breaks are honored, or, at least
 distinguish between "keep this expression on one line if possible" and
 "break this expression across multiple lines even if it could fit on one line"
+
+## gren-format-preview-06
+
+To be remembered
+
+## gren-format-preview-07
+
+PrettyExpressive was dropped; no page with enforced. The output is
+as much like elm-format's output as possible.
+

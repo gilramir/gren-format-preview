@@ -11,14 +11,13 @@ import os
 import subprocess
 
 REPOS = [
-    "https://github.com/gilramir/gren-compiler.git",
-    "https://github.com/gilramir/gren-compiler-node.git",
-    "https://github.com/gilramir/gren-compiler-common.git",
+    "https://github.com/gilramir/gren-format.git",
+    "https://github.com/gilramir/gren-format-lib.git",
 ]
 
 
 def repo_name(url):
-    return url.removesuffix(".git").rsplit("/", 1)[-1].lstrip("gren-")
+    return url.removesuffix(".git").rsplit("/", 1)[-1]
 
 
 def update_if_exists(url, tag):
@@ -32,8 +31,8 @@ def update_if_exists(url, tag):
         print(f"Checking out {tag} in {name} ...")
         subprocess.run(["git", "-C", name, "checkout", tag], check=True)
     else:
-        print(f"Checking out formatter branch in {name} ...")
-        subprocess.run(["git", "-C", name, "checkout", "formatter"], check=True)
+        print(f"Checking out like-elm-format branch in {name} ...")
+        subprocess.run(["git", "-C", name, "checkout", "like-elm-format"], check=True)
         print(f"Pulling {name} ...")
         subprocess.run(["git", "-C", name, "pull"], check=True)
 

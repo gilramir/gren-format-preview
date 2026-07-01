@@ -2,7 +2,6 @@
 
 set -e
 
-cd compiler
+cd gren-format
 
-devbox run prepare-deps
 devbox run build

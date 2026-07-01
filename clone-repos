@@ -3,31 +3,42 @@
 
 import subprocess
 
-REPOS = [
-    "https://github.com/gilramir/gren-compiler.git",
-    "https://github.com/gilramir/gren-compiler-node.git",
-    "https://github.com/gilramir/gren-compiler-common.git",
+NON_CORE_REPOS = [
+    "https://github.com/gilramir/gren-format.git",
+    "https://github.com/gilramir/gren-format-lib.git",
+]
+
+CORE_REPOS = [
 ]
 
 
 def repo_name(url):
-    return url.removesuffix(".git").rsplit("/", 1)[-1].lstrip("gren-")
+    return url.removesuffix(".git").rsplit("/", 1)[-1]
 
 
-def clone_and_configure(url):
+def clone_and_configure(url, is_core):
     name = repo_name(url)
     print(f"Cloning {url} ...")
     subprocess.run(["git", "clone", url, name], check=True)
-    print("  Checking out formatter branch")
-    subprocess.run(
-        ["git", "-C", name, "checkout", "formatter"],
-        check=True,
-    )
+    if is_core:
+        print("  Checking out formatter branch")
+        subprocess.run(
+            ["git", "-C", name, "checkout", "formatter"],
+            check=True,
+        )
+    else:
+        print("  Checking out like-elm-format branch")
+        subprocess.run(
+            ["git", "-C", name, "checkout", "like-elm-format"],
+            check=True,
+        )
 
 
 def main() -> None:
-    for url in REPOS:
-        clone_and_configure(url)
+    for url in NON_CORE_REPOS:
+        clone_and_configure(url, is_core=False)
+    for url in CORE_REPOS:
+        clone_and_configure(url, is_core=True)
 
     print("\nDone.")
 
