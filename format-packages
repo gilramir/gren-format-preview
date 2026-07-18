@@ -54,19 +54,27 @@ CATEGORY_RE = re.compile(r'^-- ([A-Z][A-Z ]+?) -{2,}', re.MULTILINE)
 MIN_GREN_VERSION = (0, 6, 0)
 
 
-def _find_nearest_gren_json(start_dir: str, stop_dir: str) -> str | None:
-    """Walk up from start_dir to stop_dir returning the first gren.json found."""
-    d = start_dir
-    while True:
-        candidate = os.path.join(d, "gren.json")
-        if os.path.isfile(candidate):
-            return candidate
-        if os.path.abspath(d) == os.path.abspath(stop_dir):
-            return None
-        parent = os.path.dirname(d)
-        if parent == d:
-            return None
-        d = parent
+def _find_gren_json_files(search_dir: str) -> list[str]:
+    """Return absolute paths of all gren.json files found recursively under search_dir."""
+    found = []
+    for root, _dirs, files in os.walk(search_dir):
+        if "gren.json" in files:
+            found.append(os.path.join(root, "gren.json"))
+    return found
+
+
+def _find_gren_files_for_package(package_dir: str) -> list[str]:
+    """Return .gren files under package_dir, not descending into nested sub-packages
+    (subdirectories that themselves contain a gren.json)."""
+    found = []
+    for root, dirs, files in os.walk(package_dir):
+        if root != package_dir and os.path.isfile(os.path.join(root, "gren.json")):
+            dirs[:] = []
+            continue
+        for f in files:
+            if f.endswith(".gren"):
+                found.append(os.path.join(root, f))
+    return found
 
 
 def _gren_version_ok(gren_json_path: str) -> bool:
@@ -125,101 +133,104 @@ def _do_fetch(author: str, repo: str, version: str, cwd: str) -> str | None:
         return f"{author}/{repo}"
 
 
-def _do_format(pkg: str, dest: str, gren_sh: str) -> tuple[str, str, bool] | None:
-    """Format one package; return (pkg, category, timed_out) on failure/timeout, None on success."""
-    print(f"Formatting {pkg} ...")
+def _do_format_package(gren_json_path: str, gren_sh: str) -> tuple[str, str, bool] | None:
+    """Format one package in place; return (gren_json_path, category, timed_out) on
+    failure/timeout, None on success."""
+    package_dir = os.path.dirname(gren_json_path)
+    print(f"Formatting {package_dir} ...")
     try:
         result = subprocess.run(
-            [gren_sh, "format", "--dangerous"],
-            cwd=dest,
+            [gren_sh],
+            cwd=package_dir,
             capture_output=True,
             text=True,
             timeout=5,
         )
         if result.returncode != 0:
             category = _parse_category(result.stdout + result.stderr)
-            return (pkg, category, False)
+            return (gren_json_path, category, False)
         return None
     except subprocess.TimeoutExpired:
-        print(f"  TIMEOUT: {pkg}", file=sys.stderr)
-        return (pkg, "TIMEOUT", True)
+        print(f"  TIMEOUT: {package_dir}", file=sys.stderr)
+        return (gren_json_path, "TIMEOUT", True)
 
 
-def _find_gren_files(package_dir: str) -> list[str]:
-    """Return absolute paths of all .gren files under package_dir."""
-    found = []
-    for root, _dirs, files in os.walk(package_dir):
-        for f in files:
-            if f.endswith(".gren"):
-                found.append(os.path.join(root, f))
-    return found
-
-
-def _do_check(rel_path: str, abs_path: str, gren_sh: str) -> tuple[str, str, bool] | None:
-    """Check one file; return (rel_path, category, timed_out) on failure/timeout, None on success."""
-    try:
-        result = subprocess.run(
-            [gren_sh, "format", f"--check={abs_path}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        output = (result.stdout + result.stderr).strip()
-        if "Success" in output:
-            return None
-        category = _parse_category(output)
-        return (rel_path, category, False)
-    except subprocess.TimeoutExpired:
-        print(f"  TIMEOUT: {rel_path}", file=sys.stderr)
-        return (rel_path, "TIMEOUT", True)
+def _do_check_package(gren_json_path: str, gren_sh: str) -> tuple[str, str] | None:
+    """Try to parse every .gren file belonging to this package with --pre-ast.
+    Return None if the whole package parses cleanly, else (gren_json_path, category)
+    for the first file that fails (category is "TIMEOUT" on timeout)."""
+    package_dir = os.path.dirname(gren_json_path)
+    for abs_path in _find_gren_files_for_package(package_dir):
+        try:
+            result = subprocess.run(
+                [gren_sh, f"--pre-ast={abs_path}"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                category = _parse_category(result.stdout + result.stderr)
+                return (gren_json_path, category)
+        except subprocess.TimeoutExpired:
+            return (gren_json_path, "TIMEOUT")
+    return None
 
 
 def cmd_check(args) -> None:
     cwd = os.getcwd()
-    gren_sh = os.path.join(SCRIPT_DIR, "gren.sh")
+    gren_sh = os.path.join(SCRIPT_DIR, "gren-format.sh")
 
     if args.packages:
-        pkg_names = args.packages
+        search_dirs = []
+        for pkg in args.packages:
+            dest = os.path.join(cwd, pkg)
+            if not os.path.isdir(dest):
+                print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
+                continue
+            search_dirs.append(dest)
     else:
-        all_packages = fetch_package_list()
-        pkg_names = [
-            f"{author}/{repo}"
-            for author, repo, _ in all_packages
-            if os.path.isdir(os.path.join(cwd, author, repo))
-        ]
+        search_dirs = [cwd]
 
-    files_to_check = []
+    gren_json_paths = set()
+    for search_dir in search_dirs:
+        gren_json_paths.update(_find_gren_json_files(search_dir))
+
+    to_check = []
     skipped = []      # list of rel_path
-    for pkg in pkg_names:
-        dest = os.path.join(cwd, pkg)
-        if not os.path.isdir(dest):
-            print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
-            continue
-        print(f"Checking {pkg} ...")
-        for abs_path in _find_gren_files(dest):
-            rel_path = os.path.relpath(abs_path, cwd)
-            gren_json = _find_nearest_gren_json(os.path.dirname(abs_path), dest)
-            if gren_json is not None and not _gren_version_ok(gren_json):
-                print(f"Skipping due to gren version: {rel_path}")
-                skipped.append(rel_path)
-            else:
-                files_to_check.append((rel_path, abs_path))
+    for gren_json_path in sorted(gren_json_paths):
+        rel_path = os.path.relpath(gren_json_path, cwd)
+        if not _gren_version_ok(gren_json_path):
+            print(f"Skipping due to gren version: {rel_path}")
+            skipped.append(rel_path)
+        else:
+            to_check.append(gren_json_path)
 
     n_ok = 0
-    failed = []       # list of (path, category)
-    timed_out = []    # list of (path, category)
+    working = []      # list of gren_json_path (abs)
+    failed = []       # list of (rel_path, category)
+    timed_out = []    # list of (rel_path, category)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
         futures = {
-            pool.submit(_do_check, rel, abs_path, gren_sh): rel
-            for rel, abs_path in files_to_check
+            pool.submit(_do_check_package, gren_json_path, gren_sh): gren_json_path
+            for gren_json_path in to_check
         }
         for fut in concurrent.futures.as_completed(futures):
+            gren_json_path = futures[fut]
+            print(f"Checked {os.path.relpath(gren_json_path, cwd)}")
             result = fut.result()
             if result is None:
                 n_ok += 1
+                working.append(gren_json_path)
             else:
-                path, category, is_timeout = result
-                (timed_out if is_timeout else failed).append((path, category))
+                _, category = result
+                rel_path = os.path.relpath(gren_json_path, cwd)
+                (timed_out if category == "TIMEOUT" else failed).append((rel_path, category))
+
+    working_paths = sorted(os.path.relpath(p, cwd) for p in working)
+    with open("checked.txt", "w") as f:
+        f.write("\n".join(working_paths))
+        if working_paths:
+            f.write("\n")
 
     failed_paths = [p for p, _ in failed]
     timed_out_paths = [p for p, _ in timed_out]
@@ -241,14 +252,15 @@ def cmd_check(args) -> None:
     print(f"Skipped:    {len(skipped)}")
     print(f"Failed:     {len(failed)}")
     print(f"Timed out:  {len(timed_out)}")
+    print("\nWrote passing package list to checked.txt")
     if skipped:
-        print("\nSkipped files:")
+        print("\nSkipped packages:")
         for path in sorted(skipped):
             print(f"  {path}")
     if failed:
-        _print_by_category(failed, "Failed files")
+        _print_by_category(failed, "Failed packages")
     if timed_out:
-        _print_by_category(timed_out, "Timed out files")
+        _print_by_category(timed_out, "Timed out packages")
 
 
 def _print_failures(failed: list[str]) -> None:
@@ -290,42 +302,56 @@ def cmd_fetch(args) -> None:
 
 def cmd_format(args) -> None:
     cwd = os.getcwd()
-    gren_sh = os.path.join(SCRIPT_DIR, "gren.sh")
+    gren_sh = os.path.join(SCRIPT_DIR, "gren-format.sh")
+
+    if not os.path.isfile(args.input):
+        print(f"Input file not found: {args.input}", file=sys.stderr)
+        print("Run 'format-packages check' first to generate it.", file=sys.stderr)
+        sys.exit(1)
+
+    with open(args.input) as f:
+        rel_paths = [line.strip() for line in f if line.strip()]
 
     if args.packages:
-        pkg_names = args.packages
-    else:
-        all_packages = fetch_package_list()
-        pkg_names = [
-            f"{author}/{repo}"
-            for author, repo, _ in all_packages
-            if os.path.isdir(os.path.join(cwd, author, repo))
-        ]
+        prefixes = tuple(f"{pkg}{os.sep}" for pkg in args.packages)
+        rel_paths = [p for p in rel_paths if p.startswith(prefixes)]
 
     targets = []
-    for pkg in pkg_names:
-        dest = os.path.join(cwd, pkg)
-        if not os.path.isdir(dest):
-            print(f"Not found locally, skipping: {pkg}", file=sys.stderr)
-        elif not _gren_version_ok(os.path.join(dest, "gren.json")):
-            print(f"Skipping due to gren version: {pkg}")
+    for rel_path in rel_paths:
+        gren_json_path = os.path.join(cwd, rel_path)
+        if not os.path.isfile(gren_json_path):
+            print(f"Not found, skipping: {rel_path}", file=sys.stderr)
         else:
-            targets.append((pkg, dest))
+            targets.append(gren_json_path)
 
-    failed = []       # list of (pkg, category)
-    timed_out = []    # list of (pkg, category)
+    failed = []       # list of (rel_path, category)
+    timed_out = []    # list of (rel_path, category)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
         futures = {
-            pool.submit(_do_format, pkg, dest, gren_sh): pkg
-            for pkg, dest in targets
+            pool.submit(_do_format_package, gren_json_path, gren_sh): gren_json_path
+            for gren_json_path in targets
         }
         for fut in concurrent.futures.as_completed(futures):
+            gren_json_path = futures[fut]
             result = fut.result()
             if result is not None:
-                pkg, category, is_timeout = result
-                (timed_out if is_timeout else failed).append((pkg, category))
+                _, category, is_timeout = result
+                rel_path = os.path.relpath(gren_json_path, cwd)
+                (timed_out if is_timeout else failed).append((rel_path, category))
 
-    _print_failures([p for p, _ in failed])
+    failed_paths = [p for p, _ in failed]
+    timed_out_paths = [p for p, _ in timed_out]
+
+    with open("format_failed.txt", "w") as f:
+        f.write("\n".join(sorted(failed_paths)))
+        if failed_paths:
+            f.write("\n")
+    with open("format_timedout.txt", "w") as f:
+        f.write("\n".join(sorted(timed_out_paths)))
+        if timed_out_paths:
+            f.write("\n")
+
+    _print_failures(failed_paths)
     if failed:
         _print_by_category(failed, "Failed packages")
     if timed_out:
@@ -358,13 +384,22 @@ def main() -> None:
 
     format_parser = subparsers.add_parser(
         "format",
-        help="Run gren format --dangerous on cloned packages",
+        help="Run gren-format.sh on packages listed in the check output file",
     )
     format_parser.add_argument(
         "packages",
         nargs="*",
         metavar="AUTHOR/REPO",
-        help="Packages to format. Formats all locally cloned packages if omitted.",
+        help="Restrict formatting to these packages. Formats every package listed "
+        "in the input file if omitted.",
+    )
+    format_parser.add_argument(
+        "-i",
+        "--input",
+        default="checked.txt",
+        metavar="PATH",
+        help="File listing gren.json paths to format, one per line (default: checked.txt, "
+        "as produced by the check subcommand).",
     )
     format_parser.add_argument(
         "-j", type=int, default=1, metavar="N", help="Parallel workers (default 1)."
@@ -373,13 +408,13 @@ def main() -> None:
 
     check_parser = subparsers.add_parser(
         "check",
-        help="Check formatting of .gren files in cloned packages",
+        help="Find gren.json files and check whether their packages parse",
     )
     check_parser.add_argument(
         "packages",
         nargs="*",
         metavar="AUTHOR/REPO",
-        help="Packages to check. Checks all locally cloned packages if omitted.",
+        help="Packages to check. Searches the whole current directory tree if omitted.",
     )
     check_parser.add_argument(
         "-j", type=int, default=1, metavar="N", help="Parallel workers (default 1)."
