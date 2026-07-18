@@ -32,7 +32,7 @@ def update_if_exists(url, tag):
         subprocess.run(["git", "-C", name, "checkout", tag], check=True)
     else:
         print(f"Checking out like-elm-format branch in {name} ...")
-        subprocess.run(["git", "-C", name, "checkout", "like-elm-format"], check=True)
+        subprocess.run(["git", "-C", name, "checkout", "main"], check=True)
         print(f"Pulling {name} ...")
         subprocess.run(["git", "-C", name, "pull"], check=True)
 
